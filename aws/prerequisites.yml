@@ -14,10 +14,59 @@ Resources:
     Properties:
       RepositoryName: mate-repository
 
+  MateECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupName: MateECSSecurityGroup
+      GroupDescription: Security Group for CI Workshop
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: 
+        Fn::ImportValue: vpc-mictlan-VPC
+
+
   MateECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: mate-ecs-cluster
+
+  MateECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties: 
+      Cpu: 256
+      Memory: "0.5GB"
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref MateECSRole
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - 
+          Name: "hello-mate"
+          Image: !Join ["", [!Ref "AWS::AccountId", ".dkr.ecr.", !Ref "AWS::Region", ".amazonaws.com/", mate-repository, ":latest"]]
+          PortMappings:
+            -
+              ContainerPort: 80
+              Protocol: tcp
+              HostPort: 80
+  MateECSService:
+    Type: AWS::ECS::Service
+    Properties: 
+      Cluster: !Ref MateECSCluster
+      DesiredCount: 0
+      LaunchType: FARGATE
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          Subnets:
+          - Fn::ImportValue: 
+              vpc-mictlan-public-subnet1
+          SecurityGroups:
+          - !Ref MateECSSecurityGroup
+      ServiceName: MateWebSiteService
+      TaskDefinition: !Ref MateECSTaskDefinition
+
 
   MateECSRole:
     Type: AWS::IAM::Role
@@ -34,7 +83,7 @@ Resources:
       Path: "/"
       Policies:
         - 
-         PolicyName: "SantaFeCopyObjectRole"
+         PolicyName: "MateECSPolicy"
          PolicyDocument:
            Version: "2012-10-17"
            Statement:
