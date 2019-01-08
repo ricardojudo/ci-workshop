@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CI workshop
+
+Resources:
+  
+  MateCodeRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties: 
+      RepositoryDescription: Repo for CI workshop
+      RepositoryName: mate-repository
+
+  MateDockerImagesRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: mate-repository
+
+  MateECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: mate-ecs-cluster
+
+  MateECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - 
+         PolicyName: "SantaFeCopyObjectRole"
+         PolicyDocument:
+           Version: "2012-10-17"
+           Statement:
+              - 
+                Effect: "Allow"
+                Action: 
+                - "ecs:CreateCluster"
+                - "ecs:DeregisterContainerInstance"
+                - "ecs:DiscoverPollEndpoint"
+                - "ecs:Poll"
+                - "ecs:RegisterContainerInstance"
+                - "ecs:StartTelemetrySession"
+                - "ecs:Submit*"
+                - "ecr:GetAuthorizationToken"
+                - "ecr:BatchCheckLayerAvailability"
+                - "ecr:GetDownloadUrlForLayer"
+                - "ecr:BatchGetImage"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                Resource: "*"
