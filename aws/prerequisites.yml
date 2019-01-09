@@ -27,11 +27,31 @@ Resources:
       VpcId: 
         Fn::ImportValue: vpc-mictlan-VPC
 
+  MateALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupName: MateALBSecurityGroup
+      GroupDescription: Security Group for CI Workshop
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: 
+        Fn::ImportValue: vpc-mictlan-VPC
+
 
   MateECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: mate-ecs-cluster
+
+  MateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: mate-logs
+      RetentionInDays: 7
+
 
   MateECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -51,6 +71,73 @@ Resources:
               ContainerPort: 80
               Protocol: tcp
               HostPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+                awslogs-group: mate-logs
+                awslogs-region: !Ref "AWS::Region"
+                awslogs-stream-prefix: mate-logs
+
+  
+
+  MateTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthyThresholdCount: 2
+      Name: mate-target-group
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      UnhealthyThresholdCount: 4
+      VpcId: 
+        Fn::ImportValue: vpc-mictlan-VPC
+
+
+  MateALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      #LoadBalancerAttributes:
+      #  - Key: cross_zone.enabled
+      #    Value: true
+      Name: mate-alb
+      SecurityGroups:
+        - !Ref MateALBSecurityGroup
+      Subnets:
+        - Fn::ImportValue: 
+            vpc-mictlan-public-subnet1       
+        - Fn::ImportValue: 
+            vpc-mictlan-public-subnet2
+      Type: application
+
+  MateHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties: 
+      DefaultActions:
+        - FixedResponseConfig: 
+            ContentType: text/html
+            MessageBody: Not found (CI Workshop)
+            StatusCode: 404
+          Order: 1
+          Type: fixed-response
+
+      LoadBalancerArn: !Ref MateALB
+      Port: 80
+      Protocol: HTTP
+
+  MateHttpListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref MateTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      ListenerArn: !Ref MateHttpListener
+      Priority: 1
+
   MateECSService:
     Type: AWS::ECS::Service
     Properties: 
@@ -59,13 +146,21 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration: 
         AwsvpcConfiguration:
+          AssignPublicIp: 'ENABLED'
           Subnets:
           - Fn::ImportValue: 
               vpc-mictlan-public-subnet1
+          - Fn::ImportValue: 
+              vpc-mictlan-public-subnet2
           SecurityGroups:
           - !Ref MateECSSecurityGroup
       ServiceName: MateWebSiteService
       TaskDefinition: !Ref MateECSTaskDefinition
+      LoadBalancers:
+        - ContainerName: hello-mate
+          ContainerPort: 80
+          TargetGroupArn: !Ref MateTargetGroup
+
 
 
   MateECSRole:
@@ -78,6 +173,7 @@ Resources:
           Principal:
             Service:
             - ec2.amazonaws.com
+            - ecs-tasks.amazonaws.com
           Action:
           - sts:AssumeRole
       Path: "/"
